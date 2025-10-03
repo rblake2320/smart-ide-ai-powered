@@ -8,22 +8,23 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-ai_bp = Blueprint('ai', __name__)
+ai_bp = Blueprint("ai", __name__)
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-@ai_bp.route('/analyze-code', methods=['POST'])
+
+@ai_bp.route("/analyze-code", methods=["POST"])
 def analyze_code():
     """Analyze code for security issues, optimizations, and testing suggestions"""
     try:
         data = request.get_json()
-        code = data.get('code', '')
-        language = data.get('language', 'javascript')
-        
+        code = data.get("code", "")
+        language = data.get("language", "javascript")
+
         if not code:
-            return jsonify({'error': 'No code provided'}), 400
-        
+            return jsonify({"error": "No code provided"}), 400
+
         # Create a comprehensive prompt for code analysis
         prompt = f"""
         Analyze the following {language} code and provide suggestions in three categories:
@@ -57,68 +58,76 @@ def analyze_code():
             ]
         }}
         """
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert code analyzer specializing in security, performance, and testing. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert code analyzer specializing in security, performance, and testing. Always respond with valid JSON.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
+
         # Parse the AI response
         ai_response = response.choices[0].message.content
-        
+
         # Try to extract JSON from the response
         try:
             # Look for JSON in the response
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
             if json_match:
                 suggestions_data = json.loads(json_match.group())
                 return jsonify(suggestions_data)
             else:
                 # Fallback: create structured response from text
-                return jsonify({
+                return jsonify(
+                    {
+                        "suggestions": [
+                            {
+                                "type": "analysis",
+                                "line": 1,
+                                "severity": "info",
+                                "message": "AI analysis completed",
+                                "recommendation": ai_response[:200] + "...",
+                            }
+                        ]
+                    }
+                )
+        except json.JSONDecodeError:
+            # If JSON parsing fails, return the raw response
+            return jsonify(
+                {
                     "suggestions": [
                         {
                             "type": "analysis",
                             "line": 1,
                             "severity": "info",
                             "message": "AI analysis completed",
-                            "recommendation": ai_response[:200] + "..."
+                            "recommendation": ai_response[:200] + "...",
                         }
                     ]
-                })
-        except json.JSONDecodeError:
-            # If JSON parsing fails, return the raw response
-            return jsonify({
-                "suggestions": [
-                    {
-                        "type": "analysis",
-                        "line": 1,
-                        "severity": "info",
-                        "message": "AI analysis completed",
-                        "recommendation": ai_response[:200] + "..."
-                    }
-                ]
-            })
-            
-    except Exception as e:
-        return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+                }
+            )
 
-@ai_bp.route('/generate-tests', methods=['POST'])
+    except Exception as e:
+        return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
+
+@ai_bp.route("/generate-tests", methods=["POST"])
 def generate_tests():
     """Generate test cases for the provided code"""
     try:
         data = request.get_json()
-        code = data.get('code', '')
-        language = data.get('language', 'javascript')
-        
+        code = data.get("code", "")
+        language = data.get("language", "javascript")
+
         if not code:
-            return jsonify({'error': 'No code provided'}), 400
-        
+            return jsonify({"error": "No code provided"}), 400
+
         prompt = f"""
         Generate comprehensive test cases for the following {language} code.
         
@@ -147,64 +156,72 @@ def generate_tests():
             ]
         }}
         """
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert test engineer. Generate comprehensive test cases and respond with valid JSON."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert test engineer. Generate comprehensive test cases and respond with valid JSON.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
+
         ai_response = response.choices[0].message.content
-        
+
         # Try to extract JSON from the response
         try:
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
             if json_match:
                 tests_data = json.loads(json_match.group())
                 return jsonify(tests_data)
             else:
-                return jsonify({
+                return jsonify(
+                    {
+                        "tests": [
+                            {
+                                "name": "AI Generated Test",
+                                "description": "Test case generated by AI",
+                                "code": ai_response[:300] + "...",
+                                "expected": "See test code",
+                                "category": "unit",
+                            }
+                        ]
+                    }
+                )
+        except json.JSONDecodeError:
+            return jsonify(
+                {
                     "tests": [
                         {
                             "name": "AI Generated Test",
                             "description": "Test case generated by AI",
                             "code": ai_response[:300] + "...",
                             "expected": "See test code",
-                            "category": "unit"
+                            "category": "unit",
                         }
                     ]
-                })
-        except json.JSONDecodeError:
-            return jsonify({
-                "tests": [
-                    {
-                        "name": "AI Generated Test",
-                        "description": "Test case generated by AI",
-                        "code": ai_response[:300] + "...",
-                        "expected": "See test code",
-                        "category": "unit"
-                    }
-                ]
-            })
-            
-    except Exception as e:
-        return jsonify({'error': f'Test generation failed: {str(e)}'}), 500
+                }
+            )
 
-@ai_bp.route('/security-scan', methods=['POST'])
+    except Exception as e:
+        return jsonify({"error": f"Test generation failed: {str(e)}"}), 500
+
+
+@ai_bp.route("/security-scan", methods=["POST"])
 def security_scan():
     """Perform detailed security analysis of code"""
     try:
         data = request.get_json()
-        code = data.get('code', '')
-        language = data.get('language', 'javascript')
-        
+        code = data.get("code", "")
+        language = data.get("language", "javascript")
+
         if not code:
-            return jsonify({'error': 'No code provided'}), 400
-        
+            return jsonify({"error": "No code provided"}), 400
+
         prompt = f"""
         Perform a comprehensive security analysis of this {language} code.
         
@@ -241,27 +258,48 @@ def security_scan():
             ]
         }}
         """
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a cybersecurity expert specializing in code security analysis. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a cybersecurity expert specializing in code security analysis. Always respond with valid JSON.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.2,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
+
         ai_response = response.choices[0].message.content
-        
+
         # Try to extract JSON from the response
         try:
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
             if json_match:
                 security_data = json.loads(json_match.group())
                 return jsonify(security_data)
             else:
-                return jsonify({
+                return jsonify(
+                    {
+                        "security_score": 75,
+                        "issues": [
+                            {
+                                "type": "Security Analysis",
+                                "severity": "info",
+                                "line": 1,
+                                "description": "AI security analysis completed",
+                                "suggestion": ai_response[:200] + "...",
+                                "cwe": "N/A",
+                            }
+                        ],
+                        "recommendations": ["Review AI analysis results"],
+                    }
+                )
+        except json.JSONDecodeError:
+            return jsonify(
+                {
                     "security_score": 75,
                     "issues": [
                         {
@@ -270,46 +308,33 @@ def security_scan():
                             "line": 1,
                             "description": "AI security analysis completed",
                             "suggestion": ai_response[:200] + "...",
-                            "cwe": "N/A"
+                            "cwe": "N/A",
                         }
                     ],
-                    "recommendations": ["Review AI analysis results"]
-                })
-        except json.JSONDecodeError:
-            return jsonify({
-                "security_score": 75,
-                "issues": [
-                    {
-                        "type": "Security Analysis",
-                        "severity": "info",
-                        "line": 1,
-                        "description": "AI security analysis completed",
-                        "suggestion": ai_response[:200] + "...",
-                        "cwe": "N/A"
-                    }
-                ],
-                "recommendations": ["Review AI analysis results"]
-            })
-            
-    except Exception as e:
-        return jsonify({'error': f'Security scan failed: {str(e)}'}), 500
+                    "recommendations": ["Review AI analysis results"],
+                }
+            )
 
-@ai_bp.route('/chat', methods=['POST'])
+    except Exception as e:
+        return jsonify({"error": f"Security scan failed: {str(e)}"}), 500
+
+
+@ai_bp.route("/chat", methods=["POST"])
 def ai_chat():
     """AI chat assistant for coding help"""
     try:
         data = request.get_json()
-        message = data.get('message', '')
-        code_context = data.get('code_context', '')
-        
+        message = data.get("message", "")
+        code_context = data.get("code_context", "")
+
         if not message:
-            return jsonify({'error': 'No message provided'}), 400
-        
+            return jsonify({"error": "No message provided"}), 400
+
         # Build context-aware prompt
         context_prompt = ""
         if code_context:
             context_prompt = f"\n\nCurrent code context:\n```\n{code_context}\n```"
-        
+
         prompt = f"""
         You are an AI coding assistant integrated into a Smart IDE. Help the developer with their question.
         
@@ -317,38 +342,39 @@ def ai_chat():
         
         Provide helpful, concise, and actionable advice. If relevant to the code context, reference specific lines or functions.
         """
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful AI coding assistant. Provide clear, concise, and actionable advice."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI coding assistant. Provide clear, concise, and actionable advice.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=1000,
         )
-        
-        ai_response = response.choices[0].message.content
-        
-        return jsonify({
-            "response": ai_response,
-            "timestamp": "now"
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'Chat failed: {str(e)}'}), 500
 
-@ai_bp.route('/optimize-code', methods=['POST'])
+        ai_response = response.choices[0].message.content
+
+        return jsonify({"response": ai_response, "timestamp": "now"})
+
+    except Exception as e:
+        return jsonify({"error": f"Chat failed: {str(e)}"}), 500
+
+
+@ai_bp.route("/optimize-code", methods=["POST"])
 def optimize_code():
     """Generate optimized version of the provided code"""
     try:
         data = request.get_json()
-        code = data.get('code', '')
-        language = data.get('language', 'javascript')
-        
+        code = data.get("code", "")
+        language = data.get("language", "javascript")
+
         if not code:
-            return jsonify({'error': 'No code provided'}), 400
-        
+            return jsonify({"error": "No code provided"}), 400
+
         prompt = f"""
         Optimize the following {language} code for better performance, readability, and maintainability.
         
@@ -372,37 +398,44 @@ def optimize_code():
             "performance_gain": "Estimated 80% performance improvement"
         }}
         """
-        
+
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert software engineer specializing in code optimization. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert software engineer specializing in code optimization. Always respond with valid JSON.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
+
         ai_response = response.choices[0].message.content
-        
+
         # Try to extract JSON from the response
         try:
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
             if json_match:
                 optimization_data = json.loads(json_match.group())
                 return jsonify(optimization_data)
             else:
-                return jsonify({
+                return jsonify(
+                    {
+                        "optimized_code": ai_response,
+                        "improvements": ["AI optimization analysis completed"],
+                        "performance_gain": "See optimized code",
+                    }
+                )
+        except json.JSONDecodeError:
+            return jsonify(
+                {
                     "optimized_code": ai_response,
                     "improvements": ["AI optimization analysis completed"],
-                    "performance_gain": "See optimized code"
-                })
-        except json.JSONDecodeError:
-            return jsonify({
-                "optimized_code": ai_response,
-                "improvements": ["AI optimization analysis completed"],
-                "performance_gain": "See optimized code"
-            })
-            
+                    "performance_gain": "See optimized code",
+                }
+            )
+
     except Exception as e:
-        return jsonify({'error': f'Code optimization failed: {str(e)}'}), 500
+        return jsonify({"error": f"Code optimization failed: {str(e)}"}), 500
